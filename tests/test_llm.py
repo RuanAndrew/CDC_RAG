@@ -78,7 +78,7 @@ def test_anthropic_request_uses_messages_api_without_temperature(monkeypatch):
 
 def test_provider_defaults_use_current_model_ids():
     assert llm.provider_defaults("anthropic")["model"] == "claude-haiku-5-5"
-    assert llm.provider_defaults("ollama")["model"] == "qwen2.5:7b"
+    assert llm.provider_defaults("ollama")["model"] == "qwen2.5:1.5b"
 
 
 def test_system_prompt_warns_about_inactive_legal_status():

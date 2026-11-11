@@ -38,10 +38,10 @@ DEFAULT_MAX_TOKENS = 2000
 # a lógica de recuperação e o prompt jurídico permanecem independentes do provedor.
 LLM_PRESETS: dict[str, dict[str, str]] = {
     "ollama_local": {
-        "label": "Ollama Local — Qwen 2.5 7B",
+        "label": "Ollama Local — Qwen 2.5 (1.5B)",
         "provider": "ollama",
         "base_url": "http://localhost:11434",
-        "model": "qwen2.5:7b",
+        "model": "qwen2.5:1.5b",
         "api_key_env": "",
     },
     "ollama_cloud_deepseek": {
@@ -249,7 +249,7 @@ def generate_answer(
     hits: list[dict[str, Any]],
     *,
     provider: str = "ollama",
-    model: str = "qwen2.5:7b",
+    model: str = "qwen2.5:1.5b",
     base_url: str = "http://localhost:11434",
     api_key: str = "",
     temperature: float = 0.2,
@@ -283,7 +283,9 @@ def generate_answer(
             # num_ctx: o padrão do Ollama é pequeno e trunca o prompt em silêncio.
             "options": {
                 "temperature": temperature,
-                "num_ctx": int(os.getenv("OLLAMA_NUM_CTX", "8192")),
+                "num_gpu": int(os.getenv("OLLAMA_NUM_GPU", "0")),
+                "num_thread": int(os.getenv("OLLAMA_NUM_THREAD", "2")),
+                "num_ctx": int(os.getenv("OLLAMA_NUM_CTX", "4096")),
                 "num_predict": max_tokens,
             },
         }

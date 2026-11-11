@@ -210,7 +210,7 @@ with st.sidebar:
     st.divider()
     st.subheader("Recuperação")
     search_mode = st.selectbox("Estratégia", ["hybrid", "vector", "bm25"], index=0)
-    top_k = st.slider("Quantidade de trechos", min_value=2, max_value=12, value=6)
+    top_k = st.slider("Quantidade de trechos", min_value=2, max_value=12, value=3)
     lookup_enabled = st.checkbox("Priorizar artigos citados explicitamente", value=True)
     glossary_enabled = st.checkbox(
         "Traduzir termos leigos para termos jurídicos", value=True,
@@ -349,6 +349,8 @@ if (process_uploaded or process_sample) and ALLOW_INGESTION:
             indexed_source_url = source_url.strip()
         else:
             sample_path = Path("sample_data") / "cdc_2013_historico.pdf"
+            if not sample_path.exists():
+                sample_path = Path("sample_data") / "cdc_bolso.pdf"
             if not sample_path.exists():
                 raise FileNotFoundError("PDF de exemplo não encontrado em sample_data/.")
             pdf_bytes = sample_path.read_bytes()
