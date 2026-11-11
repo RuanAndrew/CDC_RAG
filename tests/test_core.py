@@ -1,4 +1,4 @@
-"""Testes sem dependências pesadas: pytest -q  (ou python test_core.py)."""
+"""Testes sem dependências pesadas: pytest -q  (ou python tests/test_core.py)."""
 from __future__ import annotations
 
 import re
@@ -168,13 +168,6 @@ def test_metrics():
     assert compute_metrics(["1"], {"2"}, [1])["mrr"] == 0.0
 
 
-if __name__ == "__main__":
-    for name, fn in list(globals().items()):
-        if name.startswith("test_"):
-            fn()
-            print("ok", name)
-
-
 def test_metrics_deduplicate_chunks_by_article():
     # Três chunks do mesmo artigo não devem ocupar três posições do ranking de artigos.
     m = compute_metrics(["18", "18", "18", "19"], {"19"}, [1, 2])
@@ -205,8 +198,8 @@ def test_chunking_separates_revoked_unit_from_active_units():
     assert "vigente" in statuses
 
 
-def test_metric_uses_unique_article_positions():
-    metrics = compute_metrics(["18", "18", "18", "19"], {"19"}, [1, 2])
-    assert metrics["hit@1"] == 0.0
-    assert metrics["hit@2"] == 1.0
-    assert metrics["mrr"] == 0.5
+if __name__ == "__main__":
+    for name, fn in list(globals().items()):
+        if name.startswith("test_"):
+            fn()
+            print("ok", name)

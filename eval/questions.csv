@@ -1,21 +1,41 @@
-question,expected_articles,notes
-Em quais situações posso desistir de uma compra feita pela internet?,49,direito de arrependimento (7 dias)
-Quanto tempo tenho para reclamar de um produto durável com defeito?,26,prazo decadencial 90 dias
-Qual o prazo para o fornecedor consertar um produto com vício?,18,30 dias (§ 1º)
-Quem responde pelos danos causados por um defeito de fabricação?,12,fato do produto - fabricante
-O que acontece se o serviço prestado tiver defeito que causou prejuízo?,14,fato do serviço
-O juiz pode inverter o ônus da prova a meu favor?,6,direitos básicos VIII
-O que é propaganda enganosa?,37,
-A loja pode me obrigar a comprar outro produto junto com o que eu quero?,39,venda casada (inciso I)
-Fui cobrado indevidamente. Posso receber o dobro de volta?,42,parágrafo único
-Posso ser negativado sem aviso prévio?,43,§ 2º comunicação por escrito
-Uma cláusula do contrato é abusiva. Ela vale?,51,nulidade de pleno direito
-Quem é considerado consumidor pela lei?,2,
-O que caracteriza um fornecedor?,3,
-Qual o prazo para pedir indenização por acidente de consumo?,27,prescrição 5 anos
-O que diz o artigo 49 do CDC?,49,teste de lookup por artigo
-Quais informações devem constar em contratos de financiamento?,52,
-O que é contrato de adesão?,54,
-Quais sanções administrativas podem ser aplicadas ao fornecedor?,56,
-A garantia legal depende de termo escrito?,24;50,garantia legal x contratual
-O fornecedor é obrigado a cumprir a oferta feita em anúncio?,30;35,
+question,expected_articles,notes,type
+Em quais situações posso desistir de uma compra feita pela internet?,49,direito de arrependimento (7 dias),natural
+Quanto tempo tenho para reclamar de um produto durável com defeito?,26,prazo decadencial 90 dias,natural
+Qual o prazo para o fornecedor consertar um produto com vício?,18,30 dias (§ 1º),natural
+Quem responde pelos danos causados por um defeito de fabricação?,12,fato do produto - fabricante,natural
+O que acontece se o serviço prestado tiver defeito que causou prejuízo?,14,fato do serviço,natural
+O juiz pode inverter o ônus da prova a meu favor?,6,direitos básicos VIII,natural
+O que é propaganda enganosa?,37,,natural
+A loja pode me obrigar a comprar outro produto junto com o que eu quero?,39,venda casada (inciso I),natural
+Fui cobrado indevidamente. Posso receber o dobro de volta?,42,parágrafo único,natural
+Posso ser negativado sem aviso prévio?,43,§ 2º comunicação por escrito,natural
+Uma cláusula do contrato é abusiva. Ela vale?,51,nulidade de pleno direito,natural
+Quem é considerado consumidor pela lei?,2,,natural
+O que caracteriza um fornecedor?,3,,natural
+Qual o prazo para pedir indenização por acidente de consumo?,27,prescrição 5 anos,natural
+O que diz o artigo 49 do CDC?,49,teste de lookup por artigo,lookup
+Quais informações devem constar em contratos de financiamento?,52,,natural
+O que é contrato de adesão?,54,,natural
+Quais sanções administrativas podem ser aplicadas ao fornecedor?,56,,natural
+A garantia legal depende de termo escrito?,24;50,garantia legal x contratual,natural
+O fornecedor é obrigado a cumprir a oferta feita em anúncio?,30;35,,natural
+Comprei um celular que parou de funcionar e a loja não resolveu. Posso pedir meu dinheiro de volta?,18,restituição após 30 dias,natural
+Meu nome foi para o SPC e eu nem fui avisado. Isso pode?,43,,natural
+Por quanto tempo meu nome pode ficar sujo nos cadastros?,43,§ 1º 5 anos,natural
+Comprei pelo site e quero devolver. Eu recebo o valor de volta?,49,parágrafo único,natural
+A academia diz no contrato que eu não posso cancelar. Isso é permitido?,51,,natural
+Quanto tempo vale um orçamento de serviço?,40,§ 1º 10 dias,natural
+A empresa pode me expor ao ridículo para cobrar uma dívida?,42,caput,natural
+A loja anunciou um preço e na hora de pagar cobrou mais. E agora?,30;35,,natural
+O fabricante pode escapar da responsabilidade por um produto com defeito?,12,§ 3º excludentes,natural
+O comerciante responde quando o fabricante não está identificado?,13,,natural
+Em quanto tempo perco o direito de reclamar de um produto que acaba rápido?,26,30 dias,natural
+O que é publicidade abusiva?,37,§ 2º,natural
+Quais são os direitos básicos do consumidor?,6,,natural
+A empresa me mandou um produto que eu não pedi. Preciso pagar?,39,inciso III,natural
+Qual o limite da multa por atraso no pagamento de uma compra a prazo?,52,§ 1º 2%,natural
+Posso pagar um financiamento antes do prazo e ter desconto nos juros?,52,§ 2º,natural
+O médico ou advogado responde da mesma forma que uma empresa por falha no serviço?,14,§ 4º profissionais liberais,natural
+Posso responsabilizar os sócios quando a empresa some com meu dinheiro?,28,desconsideração da personalidade jurídica,natural
+Existe proteção para quem está superendividado?,54-A,requer fonte atualizada (Lei 14.181/2021),updated
+Quais práticas são consideradas abusivas contra o consumidor?,39,,natural

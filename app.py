@@ -14,9 +14,10 @@ except ImportError:
     pass
 
 from chunking import create_rag_chunks
+from currency import OUTDATED_NOTE, possibly_outdated
 from extract import detect_cdc_page_range, extract_legal_sections, extract_pdf_pages, sanity_report
 from indexing import DEFAULT_CHROMA_DIR, index_chunks, load_active_manifest, write_jsonl_atomic
-from llm import generate_answer, get_model_presets
+from llm import describe_citation_issues, finalize_answer, generate_answer, get_model_presets
 from retrieval import Retriever, contextualize_query
 
 APP_TITLE = "CDC em Linguagem Simples"
@@ -27,6 +28,9 @@ OFFICIAL_CDC_URL = (
 OFFICIAL_CDC_PDF_URL = (
     "https://www2.camara.leg.br/legin/fed/lei/1990/lei-8078-11-setembro-1990-365086-normaatualizada-pl.pdf"
 )
+# Implantação pública: o índice é estado global em disco e a URL do provedor é livre.
+LOCK_ENDPOINTS = os.getenv("LLM_LOCK_ENDPOINTS", "0") == "1"
+ALLOW_INGESTION = os.getenv("CDC_ALLOW_INGESTION", "1") != "0"
 
 st.set_page_config(page_title=APP_TITLE, page_icon="⚖️", layout="wide")
 
@@ -107,6 +111,10 @@ def process_pdf(
             "O arquivo pode estar incompleto ou conter uma extração de texto defeituosa."
         )
 
+    # Verificação estrutural: independe do que o usuário digitou como "versão".
+    outdated = possibly_outdated(section["article_key"] for section in article_sections)
+    effective_version = source_version + (OUTDATED_NOTE if outdated else "")
+
     embedding_model, tokenizer = load_embedding_resources(embedding_model_name)
     document_hash = hashlib.sha256(pdf_bytes).hexdigest()[:16]
     chunks = create_rag_chunks(
@@ -114,7 +122,7 @@ def process_pdf(
         tokenizer,
         source_name=file_name,
         document_hash=document_hash,
-        source_version=source_version,
+        source_version=effective_version,
         source_url=source_url,
     )
     if not chunks:
@@ -129,11 +137,12 @@ def process_pdf(
         model_name=embedding_model_name,
         chroma_dir=DEFAULT_CHROMA_DIR,
         source_name=file_name,
-        source_version=source_version,
+        source_version=effective_version,
         source_url=source_url,
         source_scope=(
             "automatic_cdc_range" if detected_range is not None else "manual_single_law_confirmation"
         ),
+        extra_manifest={"possibly_outdated": outdated},
     )
     return {
         "manifest": manifest,
@@ -147,6 +156,7 @@ def process_pdf(
         "missing_articles": report["missing"],
         "inactive_articles": report["inactive"],
         "with_revoked_parts": report["with_revoked_parts"],
+        "possibly_outdated": outdated,
     }
 
 
@@ -154,7 +164,7 @@ def render_sources(sources: list[dict[str, Any]]) -> None:
     with st.expander(f"Fontes recuperadas ({len(sources)})", expanded=False):
         for i, hit in enumerate(sources, start=1):
             meta = hit.get("metadata", {}) or {}
-            st.markdown(f"**{i}. {format_reference(meta)}**")
+            st.markdown(f"**S{i} · {format_reference(meta)}**")
             st.caption(
                 f"Status: {meta.get('status', 'desconhecido')} · "
                 f"Fonte: {meta.get('source', 'não identificada')} · "
@@ -173,6 +183,8 @@ def render_chat_history() -> None:
     for message in st.session_state.get("chat_history", []):
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
+            if message.get("warning"):
+                st.warning(message["warning"])
             if message["role"] == "assistant" and message.get("sources"):
                 render_sources(message["sources"])
 
@@ -200,8 +212,23 @@ with st.sidebar:
     search_mode = st.selectbox("Estratégia", ["hybrid", "vector", "bm25"], index=0)
     top_k = st.slider("Quantidade de trechos", min_value=2, max_value=12, value=6)
     lookup_enabled = st.checkbox("Priorizar artigos citados explicitamente", value=True)
+    glossary_enabled = st.checkbox(
+        "Traduzir termos leigos para termos jurídicos", value=True,
+        help="Ex.: 'negativado' → 'cadastros de inadimplentes'. Meça o efeito com evaluate.py.",
+    )
+    expand_enabled = st.checkbox(
+        "Incluir trechos vizinhos do mesmo artigo", value=True,
+        help="Evita que o modelo veja só um parágrafo isolado de um artigo longo.",
+    )
     active_only = st.checkbox("Mostrar apenas trechos marcados como vigentes", value=True)
     rerank_enabled = st.checkbox("Aplicar reranking (mais lento)", value=False)
+    max_distance_value = st.number_input(
+        "Limiar de distância para abstenção (0 = desligado)",
+        min_value=0.0, max_value=2.0, step=0.01,
+        value=float(os.getenv("MAX_DISTANCE", "0") or 0),
+        help="Se o trecho mais próximo estiver mais longe que isso, o app não responde. "
+             "Calibre com `python evaluate.py` (eval/out_of_scope.csv).",
+    )
 
     st.divider()
     st.subheader("Modelo de linguagem")
@@ -217,9 +244,12 @@ with st.sidebar:
     )
     selected_config = model_presets[selected_preset]
     provider = selected_config["provider"]
-    base_url = st.text_input(
-        "URL base", value=selected_config["base_url"], key=f"llm_base_url_{selected_preset}"
+    base_url_input = st.text_input(
+        "URL base", value=selected_config["base_url"], key=f"llm_base_url_{selected_preset}",
+        disabled=LOCK_ENDPOINTS,
+        help="Bloqueada nesta implantação." if LOCK_ENDPOINTS else None,
     ).strip()
+    base_url = selected_config["base_url"] if LOCK_ENDPOINTS else base_url_input
     llm_model = st.text_input(
         "Identificador do modelo", value=selected_config["model"],
         key=f"llm_model_{selected_preset}",
@@ -228,11 +258,14 @@ with st.sidebar:
     api_key = ""
     api_key_env = selected_config.get("api_key_env", "")
     if api_key_env:
-        api_key = st.text_input(
-            "Chave da API", value=selected_config.get("api_key", ""),
-            type="password", key=f"llm_api_key_{selected_preset}",
-            help=f"Também pode ser definida pela variável de ambiente {api_key_env}.",
+        env_key = selected_config.get("api_key", "")
+        # A chave do ambiente nunca é enviada ao navegador: o campo começa vazio.
+        typed_key = st.text_input(
+            "Chave da API", value="", type="password", key=f"llm_api_key_{selected_preset}",
+            placeholder=f"Usando {api_key_env} do ambiente" if env_key else "Cole sua chave",
+            help=f"Deixe vazio para usar a variável de ambiente {api_key_env}.",
         )
+        api_key = typed_key.strip() or env_key
     if provider != "ollama":
         st.warning(
             "Ao usar um provedor externo, a pergunta e os trechos legais recuperados serão enviados "
@@ -242,6 +275,10 @@ with st.sidebar:
         "Temperatura", min_value=0.0, max_value=1.0, value=0.2, step=0.1,
         disabled=(provider == "anthropic"),
         help="Controla a variação da geração. A API Messages da Anthropic não recebe esse parâmetro neste cliente.",
+    )
+    max_tokens = st.number_input(
+        "Limite de tokens da resposta", min_value=300, max_value=8000, value=2000, step=100,
+        help="Modelos de raciocínio gastam parte desse limite pensando; aumente se a resposta vier vazia.",
     )
     if st.button("Limpar conversa"):
         st.session_state["chat_history"] = []
@@ -261,24 +298,30 @@ st.info(
     "posteriores, como as introduzidas pela Lei 14.181/2021. Para respostas atuais, baixe o texto "
     "atualizado no portal oficial e envie o PDF correspondente."
 )
+if not ALLOW_INGESTION:
+    st.info("A indexação pela interface está desativada nesta implantação (CDC_ALLOW_INGESTION=0).")
 
-uploaded_pdf = st.file_uploader("Envie o PDF do CDC", type=["pdf"])
+uploaded_pdf = st.file_uploader("Envie o PDF do CDC", type=["pdf"], disabled=not ALLOW_INGESTION)
 source_version = st.text_input(
     "Versão ou data declarada da fonte",
     value="",
     placeholder="Ex.: texto atualizado em 10/11/2026 ou edição de 2013",
-    help="Informe a edição/data que aparece no documento. O sistema não verifica a vigência automaticamente.",
+    help="Informe a edição/data que aparece no documento. O sistema também verifica se o texto contém "
+         "as alterações da Lei 14.181/2021, mas não verifica a vigência automaticamente.",
+    disabled=not ALLOW_INGESTION,
 )
 source_url = st.text_input(
     "URL oficial da fonte (opcional)",
     value="",
     placeholder=OFFICIAL_CDC_URL,
     help="Informe o endereço que realmente corresponde ao PDF enviado. Não deixe um link atual associado a um PDF histórico.",
+    disabled=not ALLOW_INGESTION,
 )
 confirm_unisolated_source = st.checkbox(
     "Se a detecção automática falhar, confirmo que este PDF contém exclusivamente a Lei nº 8.078/1990, sem outros atos normativos.",
     value=False,
     help="Só será necessário quando o extrator não reconhecer automaticamente a seção formal do CDC.",
+    disabled=not ALLOW_INGESTION,
 )
 
 col_a, col_b = st.columns([1, 1])
@@ -286,17 +329,18 @@ with col_a:
     process_uploaded = st.button(
         "Indexar PDF enviado",
         type="primary",
-        disabled=uploaded_pdf is None or not source_version.strip() or not embedding_model_name,
+        disabled=(not ALLOW_INGESTION) or uploaded_pdf is None or not source_version.strip()
+        or not embedding_model_name,
         use_container_width=True,
     )
 with col_b:
     process_sample = st.button(
         "Indexar PDF histórico incluído",
-        disabled=not embedding_model_name,
+        disabled=(not ALLOW_INGESTION) or not embedding_model_name,
         use_container_width=True,
     )
 
-if process_uploaded or process_sample:
+if (process_uploaded or process_sample) and ALLOW_INGESTION:
     try:
         if process_uploaded and uploaded_pdf is not None:
             pdf_bytes = uploaded_pdf.getvalue()
@@ -328,6 +372,11 @@ if process_uploaded or process_sample:
             f"Índice criado com {report['chunks']} chunks, abrangendo "
             f"{report['article_sections']} dispositivos numerados."
         )
+        if report["possibly_outdated"]:
+            st.warning(
+                "Este texto não contém os arts. 54-A e 104-A (Lei 14.181/2021): parece anterior a 2021. "
+                "A base foi marcada como possivelmente desatualizada e as respostas avisarão isso."
+            )
         if report["cdc_page_range"] is None:
             st.warning(
                 "O arquivo foi indexado integralmente após sua confirmação manual. "
@@ -377,10 +426,16 @@ if manifest:
     )
     if str(manifest.get("source_url", "")).startswith(("https://", "http://")):
         st.markdown(f"[Abrir fonte legal indexada]({manifest['source_url']})")
-    if "2013" in str(manifest.get("source_version", "")) or "históric" in str(manifest.get("source_version", "")).lower():
+    version_text = str(manifest.get("source_version", "")).lower()
+    # Índices antigos não têm a marca estrutural; nesses cai-se na heurística textual.
+    flagged_outdated = manifest.get("possibly_outdated")
+    if flagged_outdated is None:
+        flagged_outdated = "2013" in version_text or "históric" in version_text
+    if flagged_outdated:
         st.warning(
-            "A base ativa está marcada como histórica. As respostas serão limitadas à edição indexada "
-            "e não devem ser interpretadas como confirmação da legislação vigente."
+            "A base ativa parece anterior às alterações de 2021 ou está marcada como histórica. "
+            "As respostas serão limitadas à edição indexada e não devem ser interpretadas como "
+            "confirmação da legislação vigente."
         )
 else:
     st.warning("Ainda não existe uma base indexada. Envie um PDF atualizado na seção acima.")
@@ -424,16 +479,20 @@ else:
                         lookup=lookup_enabled,
                         only_active=active_only,
                         rerank=rerank_enabled,
+                        expand=expand_enabled,
+                        glossary=glossary_enabled,
+                        max_distance=max_distance_value or None,
                     )
+                warning_text = ""
                 if not hits:
                     answer = (
                         "Não encontrei trechos legais classificados como adequados para responder. "
-                        "Tente reformular a pergunta ou desative temporariamente o filtro de vigência "
-                        "para inspecionar o conteúdo histórico."
+                        "Tente reformular a pergunta, verifique se o assunto é coberto pelo CDC ou "
+                        "desative temporariamente o filtro de vigência/limiar para inspecionar a base."
                     )
                 else:
                     with st.spinner(f"Gerando explicação com {llm_model}..."):
-                        answer = generate_answer(
+                        raw_answer = generate_answer(
                             prompt,
                             hits,
                             provider=provider,
@@ -442,13 +501,20 @@ else:
                             api_key=api_key,
                             temperature=temperature,
                             conversation_history=previous_questions,
+                            max_tokens=int(max_tokens),
                         )
+                    answer, citation_report = finalize_answer(raw_answer, hits)
+                    if citation_report["needs_review"]:
+                        warning_text = describe_citation_issues(citation_report)
                 st.markdown(answer)
+                if warning_text:
+                    st.warning(warning_text)
                 render_sources(hits)
                 st.session_state["chat_history"].append({
                     "role": "assistant",
                     "content": answer,
                     "sources": hits,
+                    "warning": warning_text,
                 })
             except Exception as exc:
                 error_message = f"Não foi possível concluir a resposta: {exc}"
